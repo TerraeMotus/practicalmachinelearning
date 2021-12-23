@@ -1,0 +1,85 @@
+---
+title: "Practical Machine Learning PGA"
+author: "Diego Sanchez"
+date: "23/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+Weight lifting exercises such as bicep curls are often performed incorrectly. Based on a dataset containing different movement and position metrics for a group of participants that were instructed on how to perform the lifting correctly and incorrectly (variable “classe”), we build a machine learning algorithm that is able to predict with reasonable accuracy when a lift was performed correctly or not.
+
+
+## Data, Exploratory Analysis and Building of the Model
+
+The original dataset has 160 attributes, we discard those attributes that have empty values in more than 70% of the dataset and are left with 60 attributes.
+
+```{r, eval=T, message=F}
+library(caret)
+train<-read.csv("C:/Users/dsanchez/Downloads/pml-training.csv")
+train$classe<-as.factor(train$classe)
+train[train==""]<-NA
+emptyfields<-names(which(colSums(is.na(train))/nrow(train)>0.7))
+train=train[,!names(train) %in% emptyfields]
+```
+
+Columns 8 to 60 are the different metrics of the tracking bands the participants wore (accelerometers, gyroscopes, etc.) so we keep all of them. Column 1 is the entry number so it is discarded. Column 2 is the participant name which should not influence the correct performance of the movement so we also discard it. Through trial and error we determined that removing column 4 (raw_timestamp_part_2) improved the fit so we discarded it as well. All other columns were kept.
+
+We make a couple of feature plots to see if there are any remarkably evident relations between any given two variables. As the two examples below show, there was no clear evidence of this. Hence we decide to use all the available tracking variables in our model.
+
+```{r, echo=FALSE}
+featurePlot(x=train[,c("gyros_belt_x","accel_belt_x","magnet_belt_x")],y=train$classe,plot="pairs")
+featurePlot(x=train[,c("gyros_arm_y","accel_arm_y","magnet_arm_y")],y=train$classe,plot="pairs")
+```
+
+
+## Cross validation
+
+Since the test set lacks the classe variable it cannot be used for testing. The only chance to use the test set is for the prediction assignment. What we therefore do for cross validation purposes is splitting the train set into 70% train and 30% test. That way we can validate multiple models without compromising the real test set (prediction assignment) one.
+
+```{r, eval=T}
+set.seed(1333)
+to_train<-createDataPartition(train$classe,p=0.7,list=F)
+train_train<-train[to_train,]
+train_test<-train[-to_train,]
+```
+
+
+## Pre-Processing
+
+After analysing the histogram of all the variables, no pre-processing has been deemed as necessary: no distribution appears excessively concentrated, an example is shown below. Adding the rescaling and recentre pre-processing to the final model (as an experiment) did not increase the model accuracy at all.
+
+```{r, echo=FALSE}
+hist(train$magnet_dumbbell_z)
+```
+
+
+## Model Selection
+
+After trial and error with several methods (GLM, random forests, LDA) and excluding/excluding different variables, the results of which are not detailed here for the sake of brevity, we chose LDA over the 57 remaining columns as described above.
+
+```{r, eval=T, warning=F}
+set.seed(777)
+modFit_final<-train(classe~.,method="lda",data=train_train[,-c(1,2,4)])
+```
+
+
+## Out of Sample Error
+Our model has an accuracy of 86%, as verified with the testing subset.
+
+```{r, eval=T}
+predictions<-predict(modFit_final,train_test)
+postResample(predictions,train_test$classe)
+```
+
+In the prediction assignment, which was the real test of the model (since the set used here as test indirectly becomes part of the training set through repeated trial an error) the score obtained was exactly 85%.
+
+
+## Conclusion
+
+Based on the provided data set, it is possible to predict when a bicep curl was performed correctly or incorrectly (and if incorrectly to which category the error belongs to) as per the various data points (acceleration, gyroscope, position) provided by tracking devices, with reasonable (86%) accuracy.
+
